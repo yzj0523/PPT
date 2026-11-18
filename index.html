@@ -1,0 +1,1465 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>写作助手 - AI工作台</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        primary: '#3670e8', primaryHover: '#2b5dd4', primaryLight: '#e8f0fe',
+        sidebarBg: '#f7f8fa', borderLight: '#e5e7eb', textGray: '#6b7280',
+        textMuted: '#9ca3af', textMain: '#1f2937', danger: '#ef4444',
+        success: '#10b981'
+      },
+      fontFamily: { sans: ['Inter','-apple-system','system-ui','sans-serif'] }
+    }
+  }
+}
+</script>
+<style>
+  .checkbox-blue { accent-color: #3670e8; width: 14px; height: 14px; cursor: pointer; }
+  .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
+
+  .file-row .row-normal { display: flex; align-items: center; gap: 4px; }
+  .file-row .row-hover  { display: none; }
+  .file-row:hover .row-normal { display: none; }
+  .file-row:hover .row-hover { display: flex; align-items: center; gap: 4px; }
+
+  .tab-btn {
+    border-radius: 6px; padding: 8px 6px; text-align: center;
+    font-size: 12px; cursor: pointer; transition: all 0.2s ease;
+    border: 1px solid transparent; outline: none; position: relative;
+  }
+  .tab-btn:focus-visible { box-shadow: 0 0 0 2px rgba(54,112,232,0.3); }
+  .tab-active { background-color: #3670e8; color: #fff; border-color: #3670e8; }
+  .tab-active i { color: #fff; }
+  .tab-inactive { background-color: #f7f8fa; color: #6b7280; border-color: #e5e7eb; }
+  .tab-inactive:hover { background-color: #eef1f5; color: #374151; }
+  .tab-inactive:active { background-color: #e5e7eb; }
+
+  .tab-settings-icon {
+    position: absolute; top: 50%; right: 5px; font-size: 10px;
+    color: inherit; cursor: pointer; opacity: 0.6;
+    padding: 2px 3px; border-radius: 3px; transition: opacity 0.15s;
+    line-height: 1; transform: translateY(-50%);
+  }
+  .tab-settings-icon:hover { opacity: 1; background: rgba(255,255,255,0.2); }
+
+  .ppt-length-btn {
+    flex: 1; padding: 6px 0; text-align: center; font-size: 13px;
+    border-radius: 6px; border: 1px solid #e5e7eb; cursor: pointer;
+    background: #fff; color: #6b7280; transition: all 0.15s;
+  }
+  .ppt-length-btn:hover { border-color: #3670e8; color: #3670e8; }
+  .ppt-length-btn.active { background: #3670e8; color: #fff; border-color: #3670e8; }
+
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 50;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .modal-popup {
+    background: #fff; border-radius: 12px; box-shadow: 0 8px 40px rgba(0,0,0,0.15);
+    width: 600px; max-width: 94vw; padding: 40px; animation: fadeIn 0.2s ease;
+  }
+  .modal-popup textarea {
+    width: 100%; border: 1px solid #e5e7eb; border-radius: 6px;
+    padding: 10px 12px; font-size: 13px; resize: none; outline: none;
+    color: #1f2937; transition: border-color 0.15s;
+  }
+  .modal-popup textarea:focus { border-color: #3670e8; box-shadow: 0 0 0 2px rgba(54,112,232,0.12); }
+  .modal-popup textarea::placeholder { color: #9ca3af; }
+
+  .stream-log {
+    background: #1e1e2e; border-radius: 8px; padding: 14px 16px;
+    font-family: 'SF Mono','Menlo','Monaco',monospace; font-size: 12px;
+    color: #cdd6f4; max-height: 50vh; overflow-y: auto;
+    line-height: 1.7; white-space: pre-wrap; word-break: break-word;
+  }
+  .stream-log .cursor-blink {
+    display: inline-block; width: 8px; height: 14px; background: #3670e8;
+    animation: blink 0.8s infinite; vertical-align: middle; margin-left: 1px;
+  }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+  .btn-outline {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 12px; color: #6b7280; background: #fff;
+    border: 1px solid #e5e7eb; border-radius: 6px;
+    padding: 4px 10px; cursor: pointer; transition: all 0.15s ease; outline: none;
+  }
+  .btn-outline:hover { background: #f9fafb; border-color: #d1d5db; color: #374151; }
+  .btn-outline:active { background: #f3f4f6; }
+  .btn-outline:focus-visible { box-shadow: 0 0 0 2px rgba(54,112,232,0.25); }
+
+  .btn-danger-text {
+    display: inline-flex; align-items: center; gap: 2px;
+    font-size: 11px; color: #ef4444; background: none; border: none;
+    cursor: pointer; transition: color 0.15s;
+  }
+  .btn-danger-text:hover { color: #dc2626; text-decoration: underline; }
+
+  .bubble-user {
+    background: #f7f8fa; border-radius: 8px; padding: 10px 14px;
+    max-width: 80%; line-height: 1.6; color: #374151;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  }
+  .bubble-ai {
+    background: #e8f0fe; border-radius: 8px; padding: 10px 14px;
+    max-width: 80%; line-height: 1.6; color: #3670e8;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  }
+
+  .input-bar {
+    display: flex; align-items: center; gap: 8px;
+    background: #f7f8fa; border-radius: 8px; padding: 8px 12px;
+    border: 1px solid transparent; transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .input-bar:focus-within {
+    border-color: #3670e8; box-shadow: 0 0 0 3px rgba(54,112,232,0.12);
+  }
+  .input-bar input { flex: 1; background: transparent; outline: none; font-size: 14px; color: #1f2937; }
+  .input-bar input::placeholder { color: #9ca3af; }
+
+  .send-btn {
+    color: #3670e8; cursor: pointer; padding: 4px; border-radius: 50%;
+    transition: all 0.15s; display: flex; align-items: center;
+  }
+  .send-btn:hover { background: rgba(54,112,232,0.1); color: #2b5dd4; }
+  .send-btn:active { transform: scale(0.95); }
+
+  .record-card {
+    background: #f7f8fa; border-radius: 6px; padding: 10px;
+    cursor: pointer; transition: all 0.15s; border: 1px solid transparent;
+    position: relative;
+  }
+  .record-card:hover { background: #eef1f5; border-color: #e5e7eb; }
+  .record-card:focus-visible { box-shadow: 0 0 0 2px rgba(54,112,232,0.3); }
+
+  .record-actions-dropdown {
+    position: absolute; top: 50%; right: 8px; transform: translateY(-50%); display: none; z-index: 10;
+  }
+  .record-card:hover .record-actions-dropdown { display: block; }
+  .record-more-btn {
+    width: 26px; height: 26px; border-radius: 50%; border: 1px solid #e5e7eb;
+    background: #fff; color: #6b7280; cursor: pointer; font-size: 16px; line-height: 1;
+    text-align: center; padding: 0; transition: all 0.12s;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  }
+  .record-more-btn:hover { background: #f0f5ff; border-color: #3670e8; color: #3670e8; }
+  .record-more-btn::before, .record-more-btn::after, .record-more-btn .dot { content: ''; display: block; width: 2.5px; height: 2.5px; border-radius: 50%; background: currentColor; }
+  .record-popup {
+    position: absolute; top: 28px; right: 0; background: #fff; border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15); border: 1px solid #e5e7eb;
+    padding: 4px; min-width: 130px; z-index: 20; display: none;
+  }
+  .record-actions-dropdown:hover .record-popup,
+  .record-more-btn:focus + .record-popup { display: block; }
+  .record-popup-item {
+    display: flex; align-items: center; gap: 6px; padding: 6px 10px;
+    font-size: 12px; color: #374151; border-radius: 4px; cursor: pointer;
+    transition: background 0.1s; white-space: nowrap;
+  }
+  .record-popup-item:hover { background: #f0f5ff; color: #3670e8; }
+  .record-popup-item.danger:hover { background: #fef2f2; color: #ef4444; }
+
+  .upload-zone {
+    background: #fff; border: 1.5px dashed #d1d5db; border-radius: 8px;
+    padding: 18px; text-align: center; cursor: pointer; transition: all 0.2s;
+  }
+  .upload-zone:hover, .upload-zone.drag-over { border-color: #3670e8; background: #f0f5ff; }
+
+  .tag { background: #e8f0fe; color: #3670e8; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; }
+  .file-badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 500; }
+  .badge-parsed { background: #d1fae5; color: #059669; }
+  .badge-parsing { background: #fef3c7; color: #d97706; }
+
+  .preview-backdrop {
+    position: absolute; inset: 0; background: #fff; z-index: 20;
+    display: flex; flex-direction: column;
+  }
+  .preview-frame { flex: 1; width: 100%; border: none; }
+
+  .skeleton { animation: shimmer 1.5s infinite; background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%); background-size: 200% 100%; }
+  @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+
+  .fade-in { animation: fadeIn 0.3s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+  .analysis-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    color: #3670e8;
+  }
+  .light-bars { display: flex; align-items: flex-end; gap: 6px; height: 38px; }
+  .light-bar {
+    width: 8px;
+    height: 20px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(54,112,232,0.95), rgba(54,112,232,0.18));
+    box-shadow: 0 0 14px rgba(54,112,232,0.45);
+    animation: lightBarPulse 1s ease-in-out infinite;
+  }
+  .light-bar:nth-child(1) { animation-delay: 0s; }
+  .light-bar:nth-child(2) { animation-delay: 0.12s; }
+  .light-bar:nth-child(3) { animation-delay: 0.24s; }
+  .light-bar:nth-child(4) { animation-delay: 0.36s; }
+  .light-bar:nth-child(5) { animation-delay: 0.48s; }
+  @keyframes lightBarPulse {
+    0%, 100% { height: 16px; opacity: 0.45; transform: translateY(5px); }
+    50% { height: 38px; opacity: 1; transform: translateY(0); }
+  }
+</style>
+</head>
+<body class="bg-white h-screen flex flex-col overflow-hidden font-sans text-sm" style="color: #1f2937;">
+
+<!-- ========== 顶部导航栏 ========== -->
+<header class="h-14 border-b border-borderLight flex items-center px-5 gap-3 shrink-0 bg-white" style="z-index:30; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
+  <div class="flex items-center gap-2.5">
+    <svg width="30" height="30" viewBox="0 0 30 30" fill="none" aria-label="华鲲元启">
+      <rect width="30" height="30" rx="7" fill="#3670e8"/>
+      <path d="M7.5 15L12.5 19.5L22.5 10.5" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <span class="text-lg font-semibold text-textMain tracking-tight">写作助手</span>
+  </div>
+  <div class="flex-1"></div>
+  <div class="flex items-center gap-2">
+    <div id="apiStatus" class="w-2 h-2 rounded-full bg-green-400" title="API 连接状态"></div>
+    <div class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+      <i class="fa fa-user text-textGray"></i>
+    </div>
+    <span class="text-textMain font-medium">王小明</span>
+  </div>
+</header>
+
+<!-- ========== 三栏主体 ========== -->
+<main class="flex flex-1 overflow-hidden" style="min-height:0;">
+
+  <!-- ===== 左栏：写作来源 ===== -->
+  <aside class="w-[320px] bg-sidebarBg border-r border-borderLight flex flex-col shrink-0" aria-label="写作来源面板">
+
+    <!-- 模块1：合同源文件 -->
+    <section class="p-4 border-b border-borderLight">
+      <h2 class="font-semibold text-[15px] mb-3 text-textMain">写作来源</h2>
+
+      <div id="sourceUploadZone" class="upload-zone mb-4" tabindex="0" aria-label="上传文件，支持PDF和DOCX格式">
+        <i class="fa fa-cloud-upload text-textGray text-xl mb-2 block" aria-hidden="true"></i>
+        <p class="text-xs text-textGray">点击/拖拽/粘贴文件到此处</p>
+        <p class="text-[11px] text-textMuted mt-1">支持 pdf、docx</p>
+        <input type="file" id="sourceFileInput" accept=".pdf,.docx" multiple class="hidden">
+      </div>
+
+      <div class="flex items-center justify-between mb-2.5">
+        <span class="text-xs font-medium text-textGray uppercase tracking-wide">写作素材</span>
+        <label class="flex items-center gap-1.5 text-xs text-textGray cursor-pointer select-none">
+          <input type="checkbox" class="checkbox-blue" id="includeKnowledge" onchange="state.includeToKB = this.checked">
+          <span>纳入知识库</span>
+        </label>
+      </div>
+
+      <div class="space-y-1 max-h-[200px] overflow-y-auto scrollbar-hide" id="sourceFileList" role="list" aria-label="合同源文件列表">
+        <div id="sourceEmpty" class="text-center text-xs text-textMuted py-6">暂无文件，请上传 PDF 或 DOCX</div>
+      </div>
+    </section>
+
+    <!-- 模块2：引用知识库 -->
+    <section class="p-4 flex-1 overflow-hidden flex flex-col">
+      <h3 class="font-semibold text-[15px] mb-3 text-textMain">引用知识库</h3>
+
+      <div class="mb-4">
+        <button id="kbSelectBtn" class="w-full flex items-center justify-between px-3 py-2 border border-borderLight rounded-lg text-sm text-textGray hover:border-primary transition-colors" onclick="toggleKBSelectModal()">
+          <span id="kbSelectBtnText">请选择知识库</span>
+          <i class="fa fa-chevron-down text-xs"></i>
+        </button>
+      </div>
+
+      <div class="flex items-center justify-between mb-2.5">
+        <span class="text-xs font-medium text-textGray uppercase tracking-wide">已选知识库</span>
+        <label class="flex items-center gap-1.5 text-xs text-textGray cursor-pointer select-none">
+          <input type="checkbox" class="checkbox-blue" id="kbSelectAll" onchange="toggleAllKB(this)" aria-label="全选知识库">
+          <span>全选</span>
+        </label>
+      </div>
+
+      <div class="space-y-1 overflow-y-auto scrollbar-hide flex-1" id="kbFileList" role="list" aria-label="知识库文件列表">
+        <div id="kbEmpty" class="text-center text-xs text-textMuted py-6">暂无已选知识库</div>
+      </div>
+    </section>
+  </aside>
+
+  <!-- ===== 中栏：对话交互区 ===== -->
+  <section class="flex-1 flex flex-col border-r border-borderLight overflow-hidden bg-white" aria-label="对话交互区">
+
+    <div class="flex-1 overflow-y-auto px-5 py-4 scrollbar-hide flex items-center justify-center" aria-label="对话记录" id="chatMessages">
+      <div class="text-center px-4 max-w-lg" id="welcomeMsg">
+        <h2 class="text-xl font-bold text-textMain mb-5 flex items-center justify-center gap-2">
+          <i class="fa fa-pencil text-primary"></i> 您好，我是您的全能智能创作助手
+        </h2>
+        <p class="text-[13px] leading-relaxed text-textGray" style="line-height:2;">
+          作为一站式 AI 创作助手，依托智能生成技术，覆盖通用文稿、标准公文、演讲文稿、逻辑思维导图全场景创作需求。精准梳理内容框架、搭建逻辑脉络、统一排版格式、打磨文字表达，自动完善内容短板、优化行文逻辑、规整视觉版式，大幅节省内容撰写、排版、梳理耗时。高效完成随笔、方案、通知、汇报幻灯片、逻辑脑图等各类内容产出，让文字表达更精准、演示呈现更清晰、逻辑梳理更直观、创作效率更出众，为全品类内容创作全程助力。
+        </p>
+      </div>
+    </div>
+
+    <div class="px-4 py-3 border-t border-borderLight shrink-0 bg-white">
+      <div class="input-bar">
+        <input type="text" placeholder="请输入文案..." id="chatInput" aria-label="输入文案内容" onkeydown="if(event.key==='Enter')sendMessage()">
+        <span class="text-xs text-textGray mr-1 whitespace-nowrap" id="selectedCount">已选 0 个来源文件</span>
+        <button class="send-btn" onclick="sendMessage()" aria-label="发送消息">
+          <i class="fa fa-paper-plane" aria-hidden="true"></i>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 右栏：结果生成面板 ===== -->
+  <aside class="w-[300px] bg-white shrink-0 flex flex-col relative" aria-label="结果生成面板" id="rightPanel">
+
+    <!-- 标准视图 -->
+    <div id="rightNormalView" class="flex flex-col h-full">
+      <div class="px-4 pt-4 pb-3 border-b border-borderLight shrink-0">
+        <h3 class="font-semibold text-[15px] mb-3 flex items-center justify-between text-textMain">
+          结果
+          <button class="text-textGray hover:text-gray-500 transition-colors p-0.5" aria-label="全屏查看">
+            <i class="fa fa-expand" aria-hidden="true"></i>
+          </button>
+        </h3>
+        <div class="grid grid-cols-2 gap-2 mb-2">
+          <button class="tab-btn tab-active" onclick="switchTab(this)" aria-pressed="true" data-tab="PPT">
+            <i class="fa fa-clipboard block mb-1 text-[15px]" aria-hidden="true"></i>演讲文稿
+            <i class="fa fa-chevron-right tab-settings-icon" onclick="event.stopPropagation();togglePPTSettings()" aria-label="演讲文稿设置" title="演讲文稿设置"></i>
+          </button>
+          <button class="tab-btn tab-inactive" onclick="switchTab(this)" aria-pressed="false" data-tab="通用写作">
+            <i class="fa fa-file-text-o block mb-1 text-[15px]" aria-hidden="true"></i>通用写作
+          </button>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          
+          <button class="tab-btn tab-inactive" onclick="switchTab(this)" aria-pressed="false" data-tab="思维导图">
+            <i class="fa fa-sitemap block mb-1 text-[15px]" aria-hidden="true"></i>思维导图
+          </button>
+        </div>
+      </div>
+
+      <div class="flex-1 overflow-y-auto px-4 py-3 scrollbar-hide" aria-label="生成记录">
+        <h4 class="text-[11px] font-medium text-textGray uppercase tracking-wide mb-2.5">生成记录</h4>
+        <div class="space-y-2" id="generationRecords">
+          <div id="recordsEmpty" class="text-center text-xs text-textMuted py-8">暂无生成记录<br>选择文件后点击上方Tab生成内容</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 演讲文稿预览视图 (默认隐藏) -->
+    <div id="rightPreviewView" class="absolute inset-0 bg-white z-20 hidden flex-col">
+      <div class="flex items-center justify-between px-4 py-2.5 border-b border-borderLight shrink-0">
+        <button class="flex items-center gap-1 text-xs text-primary hover:text-primaryHover transition-colors" onclick="closePreview()">
+          <i class="fa fa-arrow-left"></i> 返回记录
+        </button>
+        <span class="text-xs font-medium text-textMain" id="previewTitle">演讲文稿 预览</span>
+        <button class="text-xs text-textGray hover:text-gray-500 transition-colors" onclick="openPreviewInNewTab()">
+          <i class="fa fa-external-link"></i> 新窗口
+        </button>
+      </div>
+      <iframe id="previewFrame" class="flex-1 w-full border-0" src="about:blank" title="演讲文稿 预览"></iframe>
+    </div>
+  </aside>
+
+</main>
+
+<script>
+// ===================== 配置 =====================
+const BRIDGE_API = 'http://127.0.0.1:4098';
+
+// ===================== 全局状态 =====================
+const state = {
+  sourceFiles: [],
+  kbFiles: [],
+  summary: '',
+  isSummarizing: false,
+  generationRecords: [],
+  activeTab: 'PPT',
+  includeToKB: true,
+  previewHtml: null,
+  pptSettingsVisible: false,
+  pptSettingsLength: '中',
+  _idCounter: 0
+};
+
+function nextId() { return 'f_' + (++state._idCounter); }
+
+// ===================== PDF.js 初始化 =====================
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ===================== API 服务 =====================
+async function callBridgeAPI(endpoint, body) {
+  try {
+    const res = await fetch(BRIDGE_API + endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(1800000)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'API 响应异常: ' + res.status);
+    return data;
+  } catch (err) {
+    console.error('Bridge API 调用失败:', err);
+    throw err;
+  }
+}
+
+async function checkAPIConnection() {
+  try {
+    const res = await fetch(BRIDGE_API + '/api/health', { signal: AbortSignal.timeout(3000) });
+    updateAPIStatus(res.ok);
+  } catch {
+    updateAPIStatus(false);
+  }
+}
+
+function updateAPIStatus(online) {
+  const dot = document.getElementById('apiStatus');
+  if (online) {
+    dot.className = 'w-2 h-2 rounded-full bg-green-400';
+    dot.title = 'API 已连接';
+  } else {
+    dot.className = 'w-2 h-2 rounded-full bg-yellow-400';
+    dot.title = 'API 未连接 (演示模式)';
+  }
+}
+
+// ===================== 文件解析 =====================
+async function parsePDF(file) {
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  let fullText = '';
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    const pageText = content.items.map(it => it.str).join(' ');
+    fullText += pageText + '\n';
+  }
+  return fullText.trim();
+}
+
+async function parseDOCX(file) {
+  const arrayBuffer = await file.arrayBuffer();
+  const result = await mammoth.extractRawText({ arrayBuffer });
+  return result.value.trim();
+}
+
+async function parseFile(file) {
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (ext === 'pdf') return parsePDF(file);
+  if (ext === 'docx') return parseDOCX(file);
+  throw new Error('不支持的文件格式: ' + ext);
+}
+
+// ===================== 文件管理 =====================
+function addFiles(files, target) {
+  const list = target === 'source' ? state.sourceFiles : state.kbFiles;
+  const promises = [];
+
+  Array.from(files).forEach(file => {
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (!['pdf', 'docx'].includes(ext)) return;
+
+    const id = nextId();
+    const entry = { id, name: file.name, text: '', parsed: false, checked: true };
+    list.push(entry);
+
+    const p = parseFile(file).then(text => {
+      entry.text = text;
+      entry.parsed = true;
+    }).catch(err => {
+      entry.text = '[解析失败: ' + err.message + ']';
+      entry.parsed = true;
+    });
+    promises.push(p);
+  });
+
+  renderFileList(target);
+  updateSourceCounts();
+
+  if (promises.length === 0) return;
+
+  Promise.allSettled(promises).then(() => {
+    renderFileList(target);
+    updateSourceCounts();
+    displayExtractedContent();
+    triggerSummary();
+  });
+}
+
+function removeFile(id, target) {
+  const list = target === 'source' ? state.sourceFiles : state.kbFiles;
+  const idx = list.findIndex(f => f.id === id);
+  if (idx >= 0) list.splice(idx, 1);
+  renderFileList(target);
+  updateSourceCounts();
+  if (state.sourceFiles.length > 0 || state.kbFiles.length > 0) triggerSummary();
+}
+
+function renderFileList(target) {
+  const list = target === 'source' ? state.sourceFiles : state.kbFiles;
+  const listId = target === 'source' ? 'sourceFileList' : 'kbFileList';
+  const emptyId = target === 'source' ? 'sourceEmpty' : 'kbEmpty';
+  const container = document.getElementById(listId);
+  const emptyEl = document.getElementById(emptyId);
+
+  const existing = container.querySelectorAll('.file-row');
+  existing.forEach(el => el.remove());
+  if (emptyEl) emptyEl.style.display = list.length === 0 ? 'block' : 'none';
+
+  list.forEach(f => {
+    const row = document.createElement('div');
+    row.className = 'file-row flex items-center justify-between bg-white rounded-md px-2.5 py-[7px] hover:shadow-sm transition-shadow fade-in';
+    row.innerHTML = `
+      <div class="flex items-center gap-2 min-w-0 flex-1">
+        <input type="checkbox" ${f.checked ? 'checked' : ''} class="checkbox-blue shrink-0" onchange="state.sourceFiles.concat(state.kbFiles).find(x=>x.id==='${f.id}').checked=this.checked;updateSourceCounts()">
+        <span class="truncate text-[13px]">${escapeHtml(f.name)}</span>
+        ${f.parsed ? '<span class="file-badge badge-parsed shrink-0">已解析</span>' : '<span class="file-badge badge-parsing shrink-0"><i class="fa fa-spinner fa-spin"></i> 解析中</span>'}
+      </div>
+      <div class="row-normal shrink-0 ml-2">
+        <i class="fa fa-check text-primary text-[11px]"></i>
+      </div>
+      <div class="row-hover shrink-0 ml-2">
+        <button class="btn-danger-text" onclick="removeFile('${f.id}','${target}')">
+          <i class="fa fa-trash-o"></i> 删除
+        </button>
+      </div>`;
+    container.appendChild(row);
+  });
+}
+
+function toggleAllKB(el) {
+  state.kbFiles.forEach(f => { f.checked = el.checked; });
+  renderFileList('kb');
+  updateSourceCounts();
+}
+
+function updateSourceCounts() {
+  const srcChecked = state.sourceFiles.filter(f => f.checked).length;
+  const kbChecked = state.kbFiles.filter(f => f.checked).length;
+  document.getElementById('selectedCount').textContent = '已选 ' + (srcChecked + kbChecked) + ' 个来源文件';
+}
+
+function getSelectedTexts() {
+  const texts = [];
+  state.sourceFiles.forEach(f => { if (f.checked && f.text) texts.push(f.text); });
+  state.kbFiles.forEach(f => { if (f.checked && f.text) texts.push(f.text); });
+  return texts;
+}
+
+// ===================== 对话区内容展示 =====================
+function displayExtractedContent() {
+  const texts = getSelectedTexts();
+  if (texts.length === 0) return;
+
+  const msgs = document.getElementById('chatMessages');
+  msgs.innerHTML = '';
+
+  msgs.classList.add('flex', 'items-center', 'justify-center');
+  const loadingWrap = document.createElement('div');
+  loadingWrap.className = 'analysis-loading fade-in';
+  loadingWrap.id = 'summaryLoadingStatus';
+  loadingWrap.innerHTML = `
+    <div class="light-bars" aria-hidden="true">
+      <span class="light-bar"></span>
+      <span class="light-bar"></span>
+      <span class="light-bar"></span>
+      <span class="light-bar"></span>
+      <span class="light-bar"></span>
+    </div>
+    <div class="text-[13px] font-medium">AI 正在分析文档</div>
+    <div class="text-[11px] text-textMuted">正在提炼核心内容与写作要点</div>`;
+  msgs.appendChild(loadingWrap);
+}
+
+function renderStreamingSummaryShell() {
+  const msgs = document.getElementById('chatMessages');
+  msgs.classList.remove('flex', 'items-center', 'justify-center');
+  msgs.innerHTML = '';
+
+  const title = getCurrentDocumentTitle();
+  const sourceCount = state.sourceFiles.filter(f => f.checked && f.text).length + state.kbFiles.filter(f => f.checked && f.text).length;
+
+  const bubbleWrap = document.createElement('div');
+  bubbleWrap.className = 'w-full max-w-[680px] mx-auto fade-in';
+  bubbleWrap.id = 'summaryBubbleWrap';
+  bubbleWrap.innerHTML = `
+    <div class="w-full px-4 py-2">
+      <div class="flex items-start justify-between mb-5">
+        <div class="w-9 h-9 rounded-full bg-primaryLight flex items-center justify-center text-primary shadow-sm">
+          <i class="fa fa-bar-chart"></i>
+        </div>
+        <button class="btn-outline"><i class="fa fa-square-o"></i> 自定义</button>
+      </div>
+      <h2 class="text-[28px] leading-tight font-bold text-textMain tracking-tight mb-2">${escapeHtml(title)}</h2>
+      <div class="text-xs text-textMuted mb-5">${sourceCount} 个来源 · 2026年7月13日</div>
+      <div class="text-[13px] leading-relaxed text-textGray streaming-text" id="summaryStreamEl" style="line-height:2;"></div>
+    </div>`;
+  msgs.appendChild(bubbleWrap);
+  msgs.scrollTop = msgs.scrollHeight;
+
+  return bubbleWrap.querySelector('.streaming-text');
+}
+
+function getCurrentDocumentTitle() {
+  const file = state.sourceFiles.find(f => f.checked && f.name) || state.kbFiles.find(f => f.checked && f.name);
+  if (!file) return '文档内容分析';
+  return file.name.replace(/\.(pdf|docx)$/i, '');
+}
+
+// ===================== AI 摘要 =====================
+async function triggerSummary() {
+  const texts = getSelectedTexts();
+  if (texts.length === 0) return;
+
+  const combined = texts.map((t, i) => `【文件${i + 1}】\n${t.length > 3000 ? t.slice(0, 3000) + '...(已截断)' : t}`).join('\n\n');
+
+  try {
+    const result = await callBridgeAPI('/api/summarize', { content: combined });
+    const summary = result?.summary || '未能生成摘要，请检查 Bridge 服务';
+    state.summary = summary;
+
+    const streamEl = renderStreamingSummaryShell();
+    await typewriteText(streamEl, summary, 20);
+    addSaveToRecordButton();
+  } catch (err) {
+    const msgs = document.getElementById('chatMessages');
+    msgs.classList.remove('flex', 'items-center', 'justify-center');
+    msgs.innerHTML = `<div class="flex justify-end fade-in"><div class="bubble-ai max-w-[85%] text-red-500">分析失败: ${escapeHtml(err.message)}</div></div>`;
+  }
+}
+
+function typewriteText(el, text, speed) {
+  if (!el) return Promise.resolve();
+  el.textContent = '';
+  let i = 0;
+  const total = text.length;
+  const msgs = document.getElementById('chatMessages');
+
+  return new Promise(resolve => {
+    function tick() {
+      if (i >= total) {
+        msgs.scrollTop = msgs.scrollHeight;
+        return resolve();
+      }
+      const batch = Math.min(3, total - i);
+      el.textContent += text.slice(i, i + batch);
+      i += batch;
+      msgs.scrollTop = msgs.scrollHeight;
+      setTimeout(tick, speed);
+    }
+    tick();
+  });
+}
+
+function addSaveToRecordButton() {
+  const wrap = document.getElementById('summaryBubbleWrap');
+  if (!wrap) return;
+  const btnDiv = document.createElement('div');
+  btnDiv.className = 'px-4 mt-5 fade-in';
+  btnDiv.innerHTML = `
+    <div class="flex items-center gap-2 mb-5 text-textGray">
+      <button class="btn-outline" onclick="saveSummaryAsRecord()"><i class="fa fa-save"></i> 保存为记录</button>
+      <button class="btn-outline" aria-label="打印"><i class="fa fa-print"></i></button>
+      <button class="btn-outline" aria-label="点赞"><i class="fa fa-thumbs-o-up"></i></button>
+      <button class="btn-outline" aria-label="评论"><i class="fa fa-comment-o"></i></button>
+    </div>
+    <div class="space-y-2">
+      <div class="bg-sidebarBg rounded-lg px-3 py-2.5 text-[13px] text-textGray">这份文档的核心结论是什么？</div>
+      <div class="bg-sidebarBg rounded-lg px-3 py-2.5 text-[13px] text-textGray">能否基于该文档生成一份正式公文或演讲文稿？</div>
+    </div>`;
+  wrap.querySelector('div').appendChild(btnDiv);
+}
+
+function saveSummaryAsRecord() {
+  if (!state.summary) return;
+  const id = nextId();
+  const title = state.summary.slice(0, 40).replace(/\n/g, ' ') + '...';
+  const record = {
+    id, title: '摘要 - ' + title, type: '文档摘要',
+    status: 'completed', timestamp: new Date().toLocaleString('zh-CN'),
+    errorMsg: '', startTime: null, estimateSeconds: 0
+  };
+  state.generationRecords.unshift(record);
+  state.previewHtml = null;
+  renderGenerationRecords();
+}
+
+// ===================== Tab 切换 =====================
+function switchTab(btn) {
+  const tab = btn.getAttribute('data-tab');
+  state.activeTab = tab;
+
+  document.querySelectorAll('#rightPanel .tab-btn').forEach(b => {
+    b.classList.remove('tab-active');
+    b.classList.add('tab-inactive');
+    b.setAttribute('aria-pressed', 'false');
+  });
+  btn.classList.remove('tab-inactive');
+  btn.classList.add('tab-active');
+  btn.setAttribute('aria-pressed', 'true');
+
+  if (tab === 'PPT') triggerPPTGeneration();
+}
+
+// ===================== 演讲文稿设置 =====================
+function togglePPTSettings() {
+  state.pptSettingsVisible = !state.pptSettingsVisible;
+  const modal = document.getElementById('pptSettingsModal');
+  if (state.pptSettingsVisible) {
+    modal.classList.remove('hidden');
+  } else {
+    modal.classList.add('hidden');
+  }
+}
+
+function closePPTSettings(e) {
+  if (e && e.target !== document.getElementById('pptSettingsModal')) return;
+  state.pptSettingsVisible = false;
+  document.getElementById('pptSettingsModal').classList.add('hidden');
+}
+
+function selectPPTSettingsLength(length, btn) {
+  state.pptSettingsLength = length;
+  document.querySelectorAll('#pptSettingsModal .ppt-length-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+// ===================== PPT 生成（流式） =====================
+async function triggerPPTGeneration() {
+  const texts = getSelectedTexts();
+  const descText = document.getElementById('pptDescription')?.value?.trim() || '';
+  const lengthLabel = state.pptSettingsLength || '中';
+
+  if (texts.length === 0 && !descText) {
+    addGenerationRecord('PPT', 'error', '请上传文件或输入文稿描述');
+    return;
+  }
+
+  const recordId = nextId();
+  addGenerationRecord('PPT', 'generating', recordId);
+
+  const combined = texts.length > 0 ? texts.join('\n\n') : '';
+
+  try {
+    const res = await fetch(BRIDGE_API + '/api/generate-ppt-stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: combined, description: descText, length: lengthLabel })
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || '响应异常: ' + res.status);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let currentEvent = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) { currentEvent = ''; continue; }
+        if (trimmed.startsWith('event: ')) {
+          currentEvent = trimmed.slice(7);
+          continue;
+        }
+        if (trimmed.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(trimmed.slice(6));
+            data._eventType = currentEvent;
+            handlePPTStreamEvent(data, recordId);
+          } catch (e) { /* skip partial */ }
+          currentEvent = '';
+        }
+      }
+    }
+
+    // Drain remaining buffer after stream ends
+    if (buffer.trim()) {
+      const lines = buffer.split('\n');
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) { currentEvent = ''; continue; }
+        if (trimmed.startsWith('event: ')) {
+          currentEvent = trimmed.slice(7);
+          continue;
+        }
+        if (trimmed.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(trimmed.slice(6));
+            data._eventType = currentEvent;
+            handlePPTStreamEvent(data, recordId);
+          } catch (e) { /* skip */ }
+          currentEvent = '';
+        }
+      }
+    }
+
+    // Fallback: if record still 'generating', mark complete or error
+    const record = state.generationRecords.find(r => r.id === recordId);
+    if (record && record.status === 'generating') {
+      if (state.previewHtml) {
+        record._html = state.previewHtml;
+        updateRecordStatus(recordId, 'completed');
+        updateRecordStreamLog(recordId, '\n✅ 生成完成');
+      } else {
+        updateRecordStatus(recordId, 'completed', '');
+        updateRecordStreamLog(recordId, '\n⚠️ 生成完成但未能提取 HTML');
+      }
+      renderGenerationRecords();
+    }
+  } catch (err) {
+    updateRecordStatus(recordId, 'error', err.message);
+    updateRecordStreamLog(recordId, '\n[错误] ' + err.message);
+  }
+}
+
+function handlePPTStreamEvent(data, recordId) {
+  const record = state.generationRecords.find(r => r.id === recordId);
+  if (!record) return;
+
+  const evType = data._eventType || data.type || '';
+
+  if (evType === 'status') {
+    updateRecordStreamLog(recordId, '[状态] ' + (data.message || '') + '\n');
+  } else if (evType === 'text') {
+    updateRecordStreamLog(recordId, data.content || '');
+  } else if (evType === 'complete') {
+    state.previewHtml = data.html;
+    record._html = data.html;
+    updateRecordStatus(recordId, 'completed');
+    updateRecordStreamLog(recordId, '\n✅ 生成完成');
+    const modal = document.getElementById('pptProgressModal');
+    if (modal && !modal.classList.contains('hidden') && modal._activeRecordId === recordId) {
+      refreshProgressModalContent(recordId);
+    }
+  } else if (evType === 'error') {
+    updateRecordStatus(recordId, 'error', data.message || '生成失败');
+    updateRecordStreamLog(recordId, '\n❌ ' + (data.message || '生成失败'));
+    const modal = document.getElementById('pptProgressModal');
+    if (modal && !modal.classList.contains('hidden') && modal._activeRecordId === recordId) {
+      refreshProgressModalContent(recordId);
+    }
+  }
+
+  refreshProgressModalIfOpen(recordId);
+}
+
+function updateRecordStreamLog(recordId, text) {
+  const record = state.generationRecords.find(r => r.id === recordId);
+  if (!record) return;
+  record.streamLog = (record.streamLog || '') + text;
+}
+
+// ===================== 生成进度弹窗 =====================
+function openPPTProgressModal(recordId) {
+  const record = state.generationRecords.find(r => r.id === recordId);
+  if (!record) return;
+
+  const modal = document.getElementById('pptProgressModal');
+  modal._activeRecordId = recordId;
+  modal.classList.remove('hidden');
+
+  refreshProgressModalContent(recordId);
+}
+
+function closePPTProgressModal() {
+  const modal = document.getElementById('pptProgressModal');
+  modal._activeRecordId = null;
+  modal.classList.add('hidden');
+}
+
+function refreshProgressModalIfOpen(recordId) {
+  const modal = document.getElementById('pptProgressModal');
+  if (!modal || modal.classList.contains('hidden')) return;
+  if (modal._activeRecordId !== recordId) return;
+  refreshProgressModalContent(recordId);
+}
+
+function refreshProgressModalContent(recordId) {
+  const record = state.generationRecords.find(r => r.id === recordId);
+  if (!record) return;
+
+  const logEl = document.getElementById('pptProgressLog');
+  const titleEl = document.getElementById('pptProgressTitle');
+  const statusEl = document.getElementById('pptProgressStatus');
+
+  if (titleEl) titleEl.textContent = record.title || '演讲文稿生成';
+  if (logEl) {
+    logEl.textContent = record.streamLog || '等待生成...';
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+  if (statusEl) {
+    if (record.status === 'generating') {
+      statusEl.innerHTML = '<span class="w-2 h-2 rounded-full bg-green-400 inline-block animate-pulse mr-1.5"></span>生成中...';
+    } else if (record.status === 'completed') {
+      statusEl.innerHTML = '<span class="w-2 h-2 rounded-full bg-green-400 inline-block mr-1.5"></span>已完成';
+    } else if (record.status === 'error') {
+      statusEl.innerHTML = '<span class="w-2 h-2 rounded-full bg-red-400 inline-block mr-1.5"></span>失败';
+    }
+  }
+}
+
+function addGenerationRecord(type, status, recordId) {
+  const id = recordId || nextId();
+  const title = type + ' - ' + (status === 'generating' ? '生成中...' : '任务');
+
+  const record = {
+    id: id,
+    title: title,
+    type: type,
+    status: status,
+    timestamp: new Date().toLocaleString('zh-CN'),
+    errorMsg: '',
+    startTime: status === 'generating' ? Date.now() : null,
+    estimateSeconds: status === 'generating' ? 90 : 0,
+    streamLog: ''
+  };
+
+  const existingIdx = state.generationRecords.findIndex(r => r.id === id);
+  if (existingIdx >= 0) {
+    state.generationRecords[existingIdx] = record;
+  } else {
+    state.generationRecords.unshift(record);
+  }
+
+  renderGenerationRecords();
+}
+
+function updateRecordStatus(id, status, errorMsg) {
+  const record = state.generationRecords.find(r => r.id === id);
+  if (!record) return;
+  record.status = status;
+  if (errorMsg) record.errorMsg = errorMsg;
+  if (status === 'completed') record.title = record.title.replace('生成中...', '已完成');
+  if (status === 'error') record.title = record.title.replace('生成中...', '失败');
+  renderGenerationRecords();
+}
+
+let _countdownTimer = null;
+
+function startCountdownTimer() {
+  if (_countdownTimer) return;
+  _countdownTimer = setInterval(() => {
+    let hasGenerating = false;
+    state.generationRecords.forEach(r => {
+      if (r.status === 'generating' && r.startTime) {
+        hasGenerating = true;
+        const el = document.getElementById('countdown-' + r.id);
+        if (el) {
+          const elapsed = Math.floor((Date.now() - r.startTime) / 1000);
+          const remaining = Math.max(0, r.estimateSeconds - elapsed);
+          const min = Math.floor(remaining / 60);
+          const sec = remaining % 60;
+          if (remaining > 0) {
+            el.textContent = '预计剩余 ' + min + '分' + String(sec).padStart(2, '0') + '秒';
+          } else {
+            el.textContent = '即将完成...';
+          }
+        }
+      }
+    });
+    if (!hasGenerating) {
+      clearInterval(_countdownTimer);
+      _countdownTimer = null;
+    }
+  }, 1000);
+}
+
+function renderGenerationRecords() {
+  const container = document.getElementById('generationRecords');
+  const emptyEl = document.getElementById('recordsEmpty');
+
+  container.querySelectorAll('.record-card').forEach(el => el.remove());
+  emptyEl.style.display = state.generationRecords.length === 0 ? 'block' : 'none';
+
+  let hasGenerating = false;
+
+  state.generationRecords.forEach(record => {
+    const card = document.createElement('div');
+    card.className = 'record-card fade-in';
+
+    if (record.status === 'generating') {
+      hasGenerating = true;
+      const remaining = record.startTime
+        ? Math.max(0, record.estimateSeconds - Math.floor((Date.now() - record.startTime) / 1000))
+        : record.estimateSeconds;
+      const min = Math.floor(remaining / 60);
+      const sec = remaining % 60;
+      card.onclick = () => openPPTProgressModal(record.id);
+      card.style.cursor = 'pointer';
+      card.innerHTML = `
+        <div class="flex items-center gap-2 text-xs text-primary mb-1 font-medium">
+          <i class="fa fa-spinner fa-spin text-[13px]"></i>
+          <span class="truncate">${escapeHtml(record.title)}</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-[11px] text-textMuted" id="countdown-${record.id}">预计剩余 ${min}分${String(sec).padStart(2, '0')}秒</span>
+          <span class="text-[10px] text-primary/40">· 点击查看生成进度</span>
+        </div>`;
+    } else if (record.status === 'error') {
+      card.innerHTML = `
+        <div class="flex items-center gap-2 text-xs text-danger mb-1 font-medium">
+          <i class="fa fa-exclamation-circle text-[13px]"></i>
+          <span class="truncate">${escapeHtml(record.title)}</span>
+        </div>
+        <div class="text-[11px] text-textMuted">${escapeHtml(record.errorMsg || '生成失败')}</div>`;
+    } else if (record.status === 'completed') {
+      card.onclick = () => openRecordPreview(record);
+      card.style.cursor = 'pointer';
+      card.innerHTML = `
+        <div class="flex items-center gap-2 text-xs text-textMain mb-1 pr-7">
+          <i class="fa fa-file-powerpoint-o text-primary text-[13px]"></i>
+          <span class="truncate font-medium">${escapeHtml(record.title)}</span>
+        </div>
+        <div class="text-[11px] text-textMuted">${record.timestamp}</div>
+        <div class="record-actions-dropdown" onclick="event.stopPropagation()">
+          <button class="record-more-btn" tabindex="0"><span class="dot"></span></button>
+          <div class="record-popup">
+            <div class="record-popup-item" onclick="downloadRecord(event,'${record.id}')"><i class="fa fa-download"></i> 下载 HTML</div>
+            <div class="record-popup-item" onclick="shareRecord(event,'${record.id}')"><i class="fa fa-share-alt"></i> 分享路径</div>
+            <div class="record-popup-item" onclick="renameRecord(event,'${record.id}')"><i class="fa fa-pencil"></i> 重命名</div>
+            <div class="record-popup-item danger" onclick="deleteRecord(event,'${record.id}')"><i class="fa fa-trash-o"></i> 删除</div>
+          </div>
+        </div>`;
+    }
+
+    container.appendChild(card);
+  });
+
+  if (hasGenerating) startCountdownTimer();
+}
+
+// ===================== 预览管理 =====================
+function showPreview(recordId) {
+  const record = state.generationRecords.find(r => r.id === recordId);
+  if (!record || record.status !== 'completed') return;
+
+  document.getElementById('previewTitle').textContent = record.type + ' 预览';
+  document.getElementById('rightNormalView').style.display = 'none';
+  const previewView = document.getElementById('rightPreviewView');
+  previewView.classList.remove('hidden');
+  previewView.style.display = 'flex';
+
+  if (state.previewHtml) {
+    const blob = new Blob([state.previewHtml], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    document.getElementById('previewFrame').src = url;
+    // 清理旧 URL
+    previewView._prevUrl = url;
+  }
+}
+
+function closePreview() {
+  document.getElementById('rightNormalView').style.display = '';
+  const previewView = document.getElementById('rightPreviewView');
+  previewView.classList.add('hidden');
+  previewView.style.display = 'none';
+  if (previewView._prevUrl) {
+    URL.revokeObjectURL(previewView._prevUrl);
+    previewView._prevUrl = null;
+  }
+  document.getElementById('previewFrame').src = 'about:blank';
+}
+
+function openPreviewInNewTab() {
+  if (!state.previewHtml) return;
+  const blob = new Blob([state.previewHtml], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  window.open(url, '_blank');
+}
+
+async function openRecordPreview(record) {
+  if (record._filePath) {
+    const w = window.open('about:blank', '_blank');
+    if (!w) { alert('请允许弹出窗口'); return; }
+    w.document.write('<div style="text-align:center;padding:40px;font-family:sans-serif;">加载中...</div>');
+    try {
+      const res = await fetch(BRIDGE_API + '/api/aurora-file?path=' + encodeURIComponent(record._filePath));
+      if (res.ok) {
+        const data = await res.json();
+        if (data.html) {
+          w.document.open();
+          w.document.write(data.html);
+          w.document.close();
+          return;
+        }
+      }
+      w.document.body.innerHTML = '<div style="text-align:center;padding:40px;color:red;">加载失败</div>';
+    } catch (e) {
+      w.document.body.innerHTML = '<div style="text-align:center;padding:40px;color:red;">加载失败: ' + e.message + '</div>';
+    }
+  } else if (record._html) {
+    const w = window.open('about:blank', '_blank');
+    if (!w) { alert('请允许弹出窗口'); return; }
+    w.document.open();
+    w.document.write(record._html);
+    w.document.close();
+  } else if (state.previewHtml) {
+    const w = window.open('about:blank', '_blank');
+    if (!w) { alert('请允许弹出窗口'); return; }
+    w.document.open();
+    w.document.write(state.previewHtml);
+    w.document.close();
+  }
+}
+
+// ===================== 辅助功能 =====================
+function saveAsNote() {
+  if (!state.summary) return;
+  const id = nextId();
+  addGenerationRecord('笔记', 'completed', id);
+  const record = state.generationRecords.find(r => r.id === id);
+  if (record) record.title = '笔记 - ' + state.summary.slice(0, 30) + '...';
+  renderGenerationRecords();
+}
+
+function sendMessage() {
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if (!text) return;
+
+  const msgs = document.getElementById('chatMessages');
+  msgs.classList.remove('flex', 'items-center', 'justify-center');
+  const welcome = document.getElementById('welcomeMsg');
+  if (welcome) welcome.remove();
+
+  const bubble = document.createElement('div');
+  bubble.className = 'flex flex-col gap-2 items-start';
+  bubble.innerHTML = `<div class="bubble-user fade-in">${escapeHtml(text)}</div>`;
+  msgs.appendChild(bubble);
+  input.value = '';
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+async function downloadRecord(ev, recordId) {
+  const record = state.generationRecords.find(r => r.id === recordId);
+  if (!record || !record._filePath) return;
+  const a = document.createElement('a');
+  a.href = BRIDGE_API + '/api/aurora-download?path=' + encodeURIComponent(record._filePath);
+  a.download = record._filePath.split('/').pop();
+  a.click();
+}
+
+async function shareRecord(ev, recordId) {
+  const record = state.generationRecords.find(r => r.id === recordId);
+  const text = record ? (record.title + '\n' + (record._filePath || '')) : '';
+  try {
+    await navigator.clipboard.writeText(text);
+    ev.target.textContent = ' 已复制';
+    setTimeout(() => { ev.target.innerHTML = '<i class="fa fa-share-alt"></i> 分享'; }, 1500);
+  } catch {
+    prompt('文件路径:', record._filePath || '');
+  }
+}
+
+async function renameRecord(ev, recordId) {
+  const record = state.generationRecords.find(r => r.id === recordId);
+  if (!record || !record._filePath) return;
+  const newName = prompt('重命名:', record._filePath.split('/').pop().replace('.html', ''));
+  if (!newName) return;
+  try {
+    const res = await fetch(BRIDGE_API + '/api/aurora-rename', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: record._filePath, name: newName })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      record._filePath = data.path;
+      record.title = record.title.replace(/[^\-]*$/, data.name.replace('.html', ''));
+      renderGenerationRecords();
+    } else {
+      alert('重命名失败');
+    }
+  } catch (e) {
+    alert('重命名失败: ' + e.message);
+  }
+}
+
+async function deleteRecord(ev, recordId) {
+  const record = state.generationRecords.find(r => r.id === recordId);
+  if (!record) return;
+  if (!confirm('确定删除 "' + record.title + '" 吗？')) return;
+  if (record._filePath) {
+    try {
+      await fetch(BRIDGE_API + '/api/aurora-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: record._filePath })
+      });
+    } catch (e) { /* ignore */ }
+  }
+  state.generationRecords = state.generationRecords.filter(r => r.id !== recordId);
+  renderGenerationRecords();
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ===================== 事件绑定 =====================
+function setupUploadZone(zoneId, inputId, target) {
+  const zone = document.getElementById(zoneId);
+  const input = document.getElementById(inputId);
+
+  zone.addEventListener('click', () => input.click());
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('drag-over');
+    if (e.dataTransfer.files.length > 0) addFiles(e.dataTransfer.files, target);
+  });
+  input.addEventListener('change', () => {
+    if (input.files.length > 0) { addFiles(input.files, target); input.value = ''; }
+  });
+}
+
+const stateKB = {
+  availableKB: [],
+  selectedKB: new Set(),
+  modalChecked: new Set()
+};
+
+async function loadAvailableKB() {
+  try {
+    const res = await fetch(BRIDGE_API + '/api/knowledge-bases');
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    stateKB.availableKB = data.items || [];
+  } catch {
+    stateKB.availableKB = [
+      { id: 'kb1', name: '公司制度知识库' },
+      { id: 'kb2', name: '产品手册知识库' },
+      { id: 'kb3', name: '常见问题知识库' }
+    ];
+  }
+}
+
+function toggleKBSelectModal() {
+  const modal = document.getElementById('kbSelectModal');
+  if (modal.classList.contains('hidden')) {
+    modal.classList.remove('hidden');
+    renderKBSelectList();
+  } else {
+    closeKBSelectModal();
+  }
+}
+
+function closeKBSelectModal() {
+  document.getElementById('kbSelectModal').classList.add('hidden');
+}
+
+function renderKBSelectList() {
+  const container = document.getElementById('kbSelectList');
+  const searchText = document.getElementById('kbSearchInput').value.toLowerCase();
+  const filtered = stateKB.availableKB.filter(kb => kb.name.toLowerCase().includes(searchText));
+
+  if (filtered.length === 0) {
+    container.innerHTML = '<div class="text-center text-xs text-textMuted py-6">暂无匹配的知识库</div>';
+    return;
+  }
+
+  container.innerHTML = filtered.map(kb => `
+    <div class="flex items-center gap-2 px-2 py-2 rounded-md hover:bg-gray-50 cursor-pointer" onclick="toggleKBSelectItem('${kb.id}')">
+      <input type="checkbox" class="checkbox-blue" ${stateKB.modalChecked.has(kb.id) ? 'checked' : ''} onclick="event.stopPropagation()">
+      <span class="text-sm text-textMain">${escapeHtml(kb.name)}</span>
+    </div>
+  `).join('');
+}
+
+function toggleKBSelectItem(id) {
+  if (stateKB.modalChecked.has(id)) {
+    stateKB.modalChecked.delete(id);
+  } else {
+    stateKB.modalChecked.add(id);
+  }
+  renderKBSelectList();
+}
+
+function toggleKBSelectAllModal(el) {
+  if (el.checked) {
+    stateKB.availableKB.forEach(kb => stateKB.modalChecked.add(kb.id));
+  } else {
+    stateKB.modalChecked.clear();
+  }
+  renderKBSelectList();
+}
+
+function filterKBSelect() {
+  renderKBSelectList();
+}
+
+function confirmKBSelect() {
+  stateKB.selectedKB = new Set(stateKB.modalChecked);
+  stateKB.modalChecked = new Set(stateKB.selectedKB);
+
+  state.kbFiles = Array.from(stateKB.selectedKB).map(id => {
+    const kb = stateKB.availableKB.find(k => k.id === id);
+    return {
+      id: id,
+      name: kb ? kb.name : id,
+      text: '',
+      parsed: true,
+      checked: true
+    };
+  });
+
+  renderFileList('kb');
+  updateSourceCounts();
+  updateKBSelectBtnText();
+  closeKBSelectModal();
+}
+
+function updateKBSelectBtnText() {
+  const count = stateKB.selectedKB.size;
+  document.getElementById('kbSelectBtnText').textContent = count > 0 ? `已选择 ${count} 个知识库` : '请选择知识库';
+}
+
+function init() {
+  setupUploadZone('sourceUploadZone', 'sourceFileInput', 'source');
+
+  checkAPIConnection();
+  renderFileList('source');
+  renderFileList('kb');
+  updateSourceCounts();
+  renderGenerationRecords();
+  loadHistoryRecords();
+  loadAvailableKB();
+  updateKBSelectBtnText();
+}
+
+async function loadHistoryRecords() {
+  try {
+    const res = await fetch(BRIDGE_API + '/api/aurora-outputs');
+    if (!res.ok) return;
+    const data = await res.json();
+    const outputs = data.outputs || [];
+    const existingTitles = new Set(state.generationRecords.map(r => r.title));
+    outputs.forEach(o => {
+      const title = o.task.replace(/^\d{8}_/, '') + ' - ' + o.name;
+      if (!existingTitles.has(title)) {
+        const record = {
+          id: nextId(),
+          title: title,
+          type: 'PPT',
+          status: 'completed',
+          timestamp: new Date(o.mtime * 1000).toLocaleString('zh-CN'),
+          errorMsg: '',
+          startTime: null,
+          estimateSeconds: 0,
+          streamLog: '',
+          _filePath: o.path
+        };
+        state.generationRecords.push(record);
+      }
+    });
+    renderGenerationRecords();
+  } catch (e) {
+    console.log('加载历史记录失败:', e.message);
+  }
+}
+
+init();
+</script>
+
+<!-- ========== 演讲文稿设置弹窗 ========== -->
+<div id="pptSettingsModal" class="modal-backdrop hidden" onclick="closePPTSettings(event)">
+  <div class="modal-popup" onclick="event.stopPropagation()">
+    <div class="flex items-center justify-between mb-4">
+      <h4 class="font-semibold text-[15px] text-textMain">演讲文稿设置</h4>
+      <button class="text-textMuted hover:text-textGray transition-colors p-0.5" onclick="closePPTSettings()">
+        <i class="fa fa-times text-sm"></i>
+      </button>
+    </div>
+    <div class="mb-4">
+      <label class="text-xs font-medium text-textGray mb-2 block">生成篇幅</label>
+      <div class="flex gap-2">
+        <button class="ppt-length-btn active" onclick="selectPPTSettingsLength('长', this)" data-length="长">长</button>
+        <button class="ppt-length-btn" onclick="selectPPTSettingsLength('中', this)" data-length="中">中</button>
+        <button class="ppt-length-btn" onclick="selectPPTSettingsLength('短', this)" data-length="短">短</button>
+      </div>
+    </div>
+    <div>
+      <label class="text-xs font-medium text-textGray mb-2 block">Slide描述</label>
+      <textarea id="pptDescription" placeholder="请输入演示文稿的主题、风格偏好、要点等..." rows="5"></textarea>
+    </div>
+    <button class="w-full mt-4 bg-primary hover:bg-primaryHover text-white font-medium py-2.5 rounded-lg text-sm transition-colors" onclick="closePPTSettings(); triggerPPTGeneration()">
+      生成演讲文稿
+    </button>
+  </div>
+</div>
+
+<!-- ========== 生成进度弹窗 ========== -->
+<div id="pptProgressModal" class="modal-backdrop hidden" onclick="closePPTProgressModal()">
+  <div class="modal-popup" style="width:560px;max-width:95vw;" onclick="event.stopPropagation()">
+    <div class="flex items-center justify-between mb-4">
+      <h4 class="font-semibold text-[15px] text-textMain" id="pptProgressTitle">演讲文稿生成</h4>
+      <button class="text-textMuted hover:text-textGray transition-colors p-0.5" onclick="closePPTProgressModal()">
+        <i class="fa fa-times text-sm"></i>
+      </button>
+    </div>
+    <div class="flex items-center gap-2 mb-3" id="pptProgressStatus">
+      <span class="w-2 h-2 rounded-full bg-green-400 inline-block animate-pulse mr-1.5"></span>生成中...
+    </div>
+    <div class="stream-log" id="pptProgressLog">等待生成...</div>
+  </div>
+</div>
+
+<!-- ========== 知识库选择弹窗 ========== -->
+<div id="kbSelectModal" class="modal-backdrop hidden" onclick="closeKBSelectModal()">
+  <div class="modal-popup" style="width:480px;max-width:95vw;" onclick="event.stopPropagation()">
+    <div class="flex items-center justify-between mb-4">
+      <h4 class="font-semibold text-[15px] text-textMain">选择知识库</h4>
+      <button class="text-textMuted hover:text-textGray transition-colors p-0.5" onclick="closeKBSelectModal()">
+        <i class="fa fa-times text-sm"></i>
+      </button>
+    </div>
+    <div class="mb-3">
+      <input type="text" id="kbSearchInput" class="w-full border border-borderLight rounded-md px-3 py-2 text-sm outline-none focus:border-primary" placeholder="搜索知识库..." oninput="filterKBSelect()">
+    </div>
+    <div class="space-y-1 max-h-[300px] overflow-y-auto scrollbar-hide" id="kbSelectList">
+      <div class="text-center text-xs text-textMuted py-6">加载中...</div>
+    </div>
+    <div class="flex items-center justify-between mt-4 pt-3 border-t border-borderLight">
+      <label class="flex items-center gap-1.5 text-xs text-textGray cursor-pointer select-none">
+        <input type="checkbox" class="checkbox-blue" id="kbSelectAllModal" onchange="toggleKBSelectAllModal(this)">
+        <span>全选</span>
+      </label>
+      <div class="flex gap-2">
+        <button class="px-4 py-2 text-sm text-textGray border border-borderLight rounded-md hover:bg-gray-50" onclick="closeKBSelectModal()">取消</button>
+        <button class="px-4 py-2 text-sm text-white bg-primary rounded-md hover:bg-primaryHover" onclick="confirmKBSelect()">确定</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
